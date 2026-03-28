@@ -438,11 +438,18 @@ fn test_registered_identities_no_duplicates_after_deactivate_reregister() {
 
     // Attempt to re-register same identity must fail (error #400).
     let result = client.try_register(&identity, &bond_contract, &true);
-    assert!(result.is_err(), "Re-registering an existing identity must fail");
+    assert!(
+        result.is_err(),
+        "Re-registering an existing identity must fail"
+    );
 
     // List must still have exactly one entry.
     let all = client.get_all_identities();
-    assert_eq!(all.len(), 1, "RegisteredIdentities must not contain duplicates");
+    assert_eq!(
+        all.len(),
+        1,
+        "RegisteredIdentities must not contain duplicates"
+    );
 }
 
 #[test]
@@ -466,10 +473,13 @@ fn test_registered_identities_list_length_matches_unique_registrations() {
     client.deactivate(&id2);
 
     let all = client.get_all_identities();
-    assert_eq!(all.len(), 3, "List length must reflect all registered identities including deactivated ones");
+    assert_eq!(
+        all.len(),
+        3,
+        "List length must reflect all registered identities including deactivated ones"
+    );
 
     assert_eq!(client.get_identity(&bond1), id1);
     assert_eq!(client.get_identity(&bond2), id2);
     assert_eq!(client.get_identity(&bond3), id3);
 }
-
