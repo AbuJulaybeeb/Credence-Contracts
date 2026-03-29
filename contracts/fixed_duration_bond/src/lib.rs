@@ -205,7 +205,7 @@ impl FixedDurationBond {
                     .instance()
                     .get(&DataKey::AccruedFees)
                     .unwrap_or(0);
-                let new_fees = add_i128(prev_fees, fee, ERR_FEE_ACCRUE_OVERFLOW);
+                let new_fees = checked_add_i128(prev_fees, fee, ERR_FEE_ACCRUE_OVERFLOW);
                 e.storage().instance().set(&DataKey::AccruedFees, &new_fees);
                 net
             } else {
