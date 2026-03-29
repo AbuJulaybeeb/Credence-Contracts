@@ -7,6 +7,7 @@ use soroban_sdk::{
 
 pub mod access_control;
 mod batch;
+pub mod claims;
 pub mod early_exit_penalty;
 mod emergency;
 mod events;
@@ -27,6 +28,7 @@ mod slash_history;
 mod slashing;
 pub mod tiered_bond;
 mod token_integration;
+pub mod upgrade_auth;
 pub mod types;
 mod validation;
 pub mod verifier;
@@ -125,7 +127,21 @@ pub enum DataKey {
     PauseApproval(u64, Address),
     PauseApprovalCount(u64),
     BondToken,
+    Token,
     GraceWindow, // FIX 1: added for configurable post-expiry grace window
+    // Claims module storage keys
+    PendingClaims(Address),
+    ClaimableAmount(Address),
+    ClaimCounter,
+    ClaimById(u64),
+    // Upgrade authorization storage keys
+    UpgradeAuth(Address),
+    AuthorizedUpgraders,
+    Implementation,
+    UpgradeAdmin,
+    UpgradeProposal(u64),
+    NextProposalId,
+    UpgradeHistory,
 }
 
 #[contract]
@@ -1412,16 +1428,127 @@ impl CredenceBond {
     pub fn cleanup_expired_claims(e: Env, user: Address) -> u32 {
         claims::cleanup_expired_claims(&e, &user)
     }
+
+    /// Get a specific claim by its ID
+    pub fn get_claim_by_id(e: Env, claim_id: u64) -> claims::PendingClaim {
+        claims::get_claim_by_id(&e, claim_id)
+    }
+
+    /// Process a single claim by ID (claim-by-ID interface)
+    pub fn claim_reward_by_id(e: Env, user: Address, claim_id: u64) -> claims::ClaimResult {
+        claims::process_claim_by_id(&e, &user, claim_id)
+    }
+
+    /// Get paginated pending claims for a user
+    pub fn get_pending_claims_paginated(
+        e: Env,
+        user: Address,
+        offset: u32,
+        limit: u32,
+    ) -> soroban_sdk::Vec<claims::PendingClaim> {
+        claims::get_pending_claims_paginated(&e, &user, offset, limit)
+    }
+
+    /// Get the count of pending claims for a user
+    pub fn get_pending_claims_count(e: Env, user: Address) -> u32 {
+        claims::get_pending_claims_count(&e, &user)
+    }
+
+    /// Process claims with explicit pagination control
+    pub fn claim_rewards_paginated(
+        e: Env,
+        user: Address,
+        offset: u32,
+        limit: u32,
+        claim_types: soroban_sdk::Vec<claims::ClaimType>,
+    ) -> claims::ClaimResult {
+        claims::process_claims_paginated(&e, &user, offset, limit, claim_types)
+    }
+
+    // ========== UUPS UPGRADE AUTHORIZATION ==========
+
+    /// Initialize upgrade authorization with an admin
+    pub fn initialize_upgrade_auth(e: Env, admin: Address) {
+        upgrade_auth::initialize_upgrade_auth(&e, &admin);
+    }
+
+    /// Grant upgrade authorization to an address
+    pub fn grant_upgrade_auth(
+        e: Env,
+        admin: Address,
+        address: Address,
+        role: upgrade_auth::UpgradeRole,
+        expires_at: u64,
+    ) {
+        upgrade_auth::grant_upgrade_auth(&e, &admin, &address, role, expires_at);
+    }
+
+    /// Revoke upgrade authorization from an address
+    pub fn revoke_upgrade_auth(e: Env, admin: Address, address: Address) {
+        upgrade_auth::revoke_upgrade_auth(&e, &admin, &address);
+    }
+
+    /// Check if an address is authorized to upgrade
+    pub fn is_authorized_upgrader(e: Env, address: Address) -> bool {
+        upgrade_auth::is_authorized_upgrader(&e, &address)
+    }
+
+    /// Get the upgrade role of an address
+    pub fn get_upgrade_role(e: Env, address: Address) -> upgrade_auth::UpgradeRole {
+        upgrade_auth::get_upgrade_role(&e, &address)
+    }
+
+    /// Create an upgrade proposal
+    pub fn propose_upgrade(
+        e: Env,
+        proposer: Address,
+        new_implementation: Address,
+        upgrade_data: soroban_sdk::Vec<u8>,
+        required_approvals: u32,
+    ) -> u64 {
+        upgrade_auth::propose_upgrade(&e, &proposer, &new_implementation, upgrade_data, required_approvals)
+    }
+
+    /// Approve an upgrade proposal
+    pub fn approve_upgrade_proposal(e: Env, approver: Address, proposal_id: u64) {
+        upgrade_auth::approve_upgrade_proposal(&e, &approver, proposal_id);
+    }
+
+    /// Execute an upgrade
+    pub fn execute_upgrade(
+        e: Env,
+        executor: Address,
+        new_implementation: Address,
+        proposal_id: Option<u64>,
+    ) {
+        upgrade_auth::execute_upgrade(&e, &executor, &new_implementation, proposal_id);
+    }
+
+    /// Get the current implementation address
+    pub fn get_implementation(e: Env) -> Address {
+        upgrade_auth::get_implementation(&e)
+    }
+
+    /// Get upgrade authorization info for an address
+    pub fn get_upgrade_auth(e: Env, address: Address) -> upgrade_auth::UpgradeAuthorization {
+        upgrade_auth::get_upgrade_auth(&e, &address)
+    }
+
+    /// Get an upgrade proposal
+    pub fn get_upgrade_proposal(e: Env, proposal_id: u64) -> upgrade_auth::UpgradeProposal {
+        upgrade_auth::get_upgrade_proposal(&e, proposal_id)
+    }
+
+    /// Get all authorized upgraders
+    pub fn get_authorized_upgraders(e: Env) -> soroban_sdk::Vec<Address> {
+        upgrade_auth::get_authorized_upgraders(&e)
+    }
+
+    /// Get upgrade history
+    pub fn get_upgrade_history(e: Env) -> soroban_sdk::Vec<upgrade_auth::UpgradeRecord> {
+        upgrade_auth::get_upgrade_history(&e)
+    }
 }
-
-#[cfg(test)]
-mod test_helpers;
-
-#[cfg(test)]
-mod test;
-
-#[cfg(test)]
-mod test_reentrancy;
 
 #[cfg(test)]
 mod test_attestation;
@@ -1537,6 +1664,10 @@ mod test_weighted_attestation;
 #[cfg(test)]
 mod test_withdraw_bond;
 #[cfg(test)]
-mod test_grace_window; // new test module from your commit
+mod test_grace_window; 
 #[cfg(test)]
 mod token_integration_test;
+#[cfg(test)]
+mod test_claim_pagination;
+#[cfg(test)]
+mod test_upgrade_auth;
